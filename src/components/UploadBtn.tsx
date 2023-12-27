@@ -8,13 +8,24 @@ import { Cloud, File } from "lucide-react";
 import { Progress } from "./ui/progress";
 import { useUploadThing } from "@/lib/uploadthing";
 import { useToast } from "./ui/use-toast";
+import { trpc } from "@/app/_trpc/client";
+import { useRouter } from "next/navigation";
 
 const UploadDropzone = () => {
+  const router = useRouter();
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const { toast } = useToast();
 
   const { startUpload } = useUploadThing("docUploader");
+  const { mutate: startPolling } = trpc.getFile.useMutation({
+    onSuccess: (file) => {
+      router.push(`/dashboard/${file.id}`);
+    },
+    retry: true,
+    retryDelay: 500,
+  });
+
   const startSimulatedProgress = () => {
     setUploadProgress(0);
 
@@ -44,8 +55,20 @@ const UploadDropzone = () => {
             variant: "destructive",
           });
         }
+        const [fileResponse] = res;
+        const key = fileResponse.key;
+
+        if (!key) {
+          return toast({
+            title: "Something went wrong",
+            description: "Please try again later",
+            variant: "destructive",
+          });
+        }
+
         clearInterval(progressInterval);
         setUploadProgress(100);
+        startPolling({key})
       }}
     >
       {({ getRootProps, getInputProps, acceptedFiles }) => (
@@ -84,6 +107,12 @@ const UploadDropzone = () => {
                   />
                 </div>
               ) : null}
+              <input
+                {...getInputProps()}
+                type="file"
+                id="dropzone-file"
+                className="hidden"
+              />
             </label>
           </div>
         </div>
